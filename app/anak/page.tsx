@@ -10,14 +10,56 @@ interface AnakPageProps {
 
 async function AnakList({ searchParams }: AnakPageProps) {
   const params = await searchParams;
-  const raw = params["search"];
-  const keyword = typeof raw === "string" ? raw : "";
+  const rawKeyword = params["search"];
+  const rawType = params["type"];
+  
+  const keyword = typeof rawKeyword === "string" ? rawKeyword : "";
+  const searchType = typeof rawType === "string" ? rawType : "nama";
 
-  const { data: anak, error } = await supabase
-    .from("anak")
-    .select("id, nik_anak, nama_anak")
-    .ilike("nama_anak", `%${keyword}%`)
-    .order("nama_anak", { ascending: true });
+  let anak = null;
+  let error = null;
+
+  try {
+    if (keyword && searchType === "posyandu") {
+      // Pencarian berdasarkan nama posyandu
+      // Menggunakan JOIN dengan foreign key posyandu_id
+      const { data, error: fetchError } = await supabase
+        .from("anak")
+        .select(`
+          id, 
+          nik_anak, 
+          nama_anak,
+          posyandu:posyandu_id (
+            nama_posyandu
+          )
+        `)
+        .ilike("posyandu.nama_posyandu", `%${keyword}%`)
+        .order("nama_anak", { ascending: true });
+
+      anak = data;
+      error = fetchError;
+    } else {
+      // Pencarian nama atau NIK
+      let query = supabase
+        .from("anak")
+        .select("id, nik_anak, nama_anak");
+
+      if (keyword) {
+        if (searchType === "nik") {
+          query = query.ilike("nik_anak", `%${keyword}%`);
+        } else {
+          // Default: search by nama
+          query = query.ilike("nama_anak", `%${keyword}%`);
+        }
+      }
+
+      const { data, error: fetchError } = await query.order("nama_anak", { ascending: true });
+      anak = data;
+      error = fetchError;
+    }
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : 'An error occurred' };
+  }
 
   if (error) {
     return (
@@ -73,7 +115,6 @@ async function AnakList({ searchParams }: AnakPageProps) {
 }
 
 export default async function AnakPage({ searchParams }: AnakPageProps) {
-  // Get total count
   const { count } = await supabase
     .from("anak")
     .select("*", { count: "exact", head: true });
