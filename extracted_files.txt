@@ -1,0 +1,1132 @@
+
+================================================================================
+File: anak\layout.tsx
+================================================================================
+
+import Navbar from '@/components/Navbar';
+import Sidebar from '@/components/Sidebar';
+import Footer from '@/components/Footer';
+
+export default function AnakLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Navbar />
+      
+      <div className="flex-1 flex">
+        <Sidebar />
+        <main className="flex-1 overflow-x-hidden">
+          {children}
+        </main>
+      </div>
+      
+      <Footer />
+    </div>
+  );
+}
+
+
+================================================================================
+File: anak\page.tsx
+================================================================================
+
+import { Suspense } from 'react';
+import { supabase } from "@/lib/supabase";
+import SearchBar from "@/components/SearchBar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Baby, Users, ChevronRight } from "lucide-react";
+import Link from "next/link";
+
+interface AnakPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+async function AnakList({ searchParams }: AnakPageProps) {
+  const params = await searchParams;
+  const rawKeyword = params["search"];
+  const rawType = params["type"];
+  
+  const keyword = typeof rawKeyword === "string" ? rawKeyword : "";
+  const searchType = typeof rawType === "string" ? rawType : "nama";
+
+  let anak = null;
+  let error = null;
+
+  try {
+    if (keyword && searchType === "posyandu") {
+      const { data, error: fetchError } = await supabase
+        .from("anak")
+        .select(`
+          id, 
+          nik_anak, 
+          nama_anak,
+          posyandu:posyandu_id (
+            nama_posyandu
+          )
+        `)
+        .ilike("posyandu.nama_posyandu", `%${keyword}%`)
+        .order("nama_anak", { ascending: true });
+
+      anak = data;
+      error = fetchError;
+    } else {
+      let query = supabase
+        .from("anak")
+        .select("id, nik_anak, nama_anak");
+
+      if (keyword) {
+        if (searchType === "nik") {
+          query = query.ilike("nik_anak", `%${keyword}%`);
+        } else {
+          query = query.ilike("nama_anak", `%${keyword}%`);
+        }
+      }
+
+      const { data, error: fetchError } = await query.order("nama_anak", { ascending: true });
+      anak = data;
+      error = fetchError;
+    }
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : 'An error occurred' };
+  }
+
+  if (error) {
+    return (
+      <Card className="border-red-200">
+        <CardContent className="pt-6">
+          <p className="text-red-500">Error: {error.message}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {anak && anak.length > 0 ? (
+        anak.map((a) => (
+          <Link key={a.id} href={`/anak/${a.id}`}>
+            <Card 
+              className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer border-l-4 border-l-purple-500 h-full"
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0">
+                    <Baby className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg text-gray-900 truncate">
+                      {a.nama_anak}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      NIK: {a.nik_anak}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))
+      ) : (
+        <div className="col-span-full">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center py-12">
+                <Baby className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">
+                  {keyword ? `Tidak ada hasil untuk "${keyword}"` : "Belum ada data anak"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default async function AnakPage({ searchParams }: AnakPageProps) {
+  const { count } = await supabase
+    .from("anak")
+    .select("*", { count: "exact", head: true });
+
+  return (
+    <div className="p-6 lg:p-8 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Data Anak</h1>
+        <p className="text-gray-600 mt-1">
+          Kelola dan lihat data anak posyandu
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Anak
+            </CardTitle>
+            <Users className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-gray-900">{count || 0}</div>
+            <p className="text-xs text-gray-600 mt-1">Terdaftar di sistem</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search Bar */}
+      <Card>
+        <CardContent className="pt-6">
+          <Suspense fallback={<div className="animate-pulse h-12 bg-gray-200 rounded" />}>
+            <SearchBar />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      {/* Data List */}
+      <Suspense fallback={
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      }>
+        <AnakList searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+
+================================================================================
+File: anak\[id]\page.tsx
+================================================================================
+
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from "@/lib/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Baby, Calendar, MapPin, TrendingUp, Weight, Ruler, Activity } from "lucide-react";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function getAnakDetail(id: string) {
+  console.log(`[DEBUG] Fetching anak with id: ${id}`);
+  
+  const { data: anak, error: anakError } = await supabase
+    .from("anak")
+    .select(`
+      *,
+      posyandu_id (
+        nama_posyandu
+      )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (anakError) {
+    console.error(`[ERROR] Failed to fetch anak:`, anakError.message);
+    return null;
+  }
+
+  if (!anak) {
+    console.warn(`[WARN] No anak found with id: ${id}`);
+    return null;
+  }
+
+  console.log(`[DEBUG] Successfully fetched anak:`, anak.nama_anak);
+
+  const { data: perkembangan, error: perkembanganError } = await supabase
+    .from("perkembangan")
+    .select("*")
+    .eq("anak_id", id)
+    .order("tanggal_pengukuran", { ascending: true });
+
+  if (perkembanganError) {
+    console.error(`[ERROR] Failed to fetch perkembangan:`, perkembanganError.message);
+  }
+
+  return {
+    anak,
+    perkembangan: perkembangan || [],
+  };
+}
+
+function calculateAge(birthDate: string) {
+  const birth = new Date(birthDate);
+  const today = new Date();
+  const months = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  
+  if (years > 0) {
+    return `${years} tahun ${remainingMonths} bulan`;
+  }
+  return `${remainingMonths} bulan`;
+}
+
+function getStatusGizi(beratBadan: number, tinggiBadan: number) {
+  const tinggiMeter = tinggiBadan / 100;
+  const bmi = beratBadan / (tinggiMeter * tinggiMeter);
+  
+  if (bmi < 17) return { status: "Gizi Kurang", color: "text-orange-600 bg-orange-50" };
+  if (bmi < 18.5) return { status: "Gizi Baik", color: "text-green-600 bg-green-50" };
+  if (bmi < 25) return { status: "Gizi Baik", color: "text-green-600 bg-green-50" };
+  if (bmi < 30) return { status: "Gizi Lebih", color: "text-yellow-600 bg-yellow-50" };
+  return { status: "Obesitas", color: "text-red-600 bg-red-50" };
+}
+
+// Chart data type
+interface ChartData {
+  tanggal: string;
+  beratBadan: number;
+  tinggiBadan: number;
+  lingkarKepala: number;
+}
+
+// Simple SVG Line Chart Component
+function SimpleLineChart({ 
+  data, 
+  dataKey, 
+  color, 
+  label,
+  unit 
+}: { 
+  data: ChartData[]; 
+  dataKey: keyof Omit<ChartData, 'tanggal'>; 
+  color: string;
+  label: string;
+  unit: string;
+}) {
+  if (data.length === 0) return null;
+
+  const values = data.map(d => d[dataKey]);
+  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+  const range = maxValue - minValue || 1;
+  
+  const width = 100;
+  const height = 60;
+  const padding = 5;
+
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1 || 1)) * (width - padding * 2) + padding;
+    const y = height - padding - ((d[dataKey] - minValue) / range) * (height - padding * 2);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="space-y-2">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32">
+        {/* Grid lines */}
+        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
+        
+        {/* Line */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        
+        {/* Points */}
+        {data.map((d, i) => {
+          const x = (i / (data.length - 1 || 1)) * (width - padding * 2) + padding;
+          const y = height - padding - ((d[dataKey] - minValue) / range) * (height - padding * 2);
+          return (
+            <circle key={i} cx={x} cy={y} r="2" fill={color} />
+          );
+        })}
+      </svg>
+      
+      {/* Labels */}
+      <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
+        <div className="text-left">
+          {data[0] && `${data[0][dataKey]} ${unit}`}
+        </div>
+        <div className="text-center">
+          {label}
+        </div>
+        <div className="text-right">
+          {data[data.length - 1] && `${data[data.length - 1][dataKey]} ${unit}`}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default async function DetailAnakPage({ params }: PageProps) {
+  const { id } = await params;
+  const data = await getAnakDetail(id);
+
+  if (!data) {
+    notFound();
+  }
+
+  const { anak, perkembangan } = data;
+  
+  const age = calculateAge(anak.tanggal_lahir);
+  
+  const chartData = perkembangan.map((item) => ({
+    tanggal: new Date(item.tanggal_pengukuran).toLocaleDateString('id-ID', { 
+      day: '2-digit', 
+      month: 'short'
+    }),
+    beratBadan: item.berat_badan,
+    tinggiBadan: item.tinggi_badan,
+    lingkarKepala: item.lingkar_kepala,
+  }));
+
+  const latestMeasurement = perkembangan[perkembangan.length - 1];
+  const statusGizi = latestMeasurement 
+    ? getStatusGizi(latestMeasurement.berat_badan, latestMeasurement.tinggi_badan)
+    : null;
+
+  return (
+    <div className="p-6 lg:p-8 space-y-6">
+      {/* Header Info */}
+      <div className="flex items-start justify-between">
+        <div>
+          <Link 
+            href="/anak" 
+            className="text-sm text-purple-600 hover:text-purple-800 mb-2 inline-block"
+          >
+            ← Kembali ke Daftar Anak
+          </Link>
+          <h1 className="text-3xl font-bold text-gray-900">{anak.nama_anak}</h1>
+          <p className="text-gray-600 mt-1">NIK: {anak.nik_anak}</p>
+        </div>
+        <div className="w-16 h-16 rounded-full bg-linear-to-br from-purple-600 to-purple-800 flex items-center justify-center">
+          <Baby className="h-8 w-8 text-white" />
+        </div>
+      </div>
+
+      {/* Info Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-sm text-gray-600">Usia</p>
+                <p className="text-xl font-bold text-gray-900">{age}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <MapPin className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-sm text-gray-600">Posyandu</p>
+                <p className="text-lg font-bold text-gray-900 truncate">
+                  {anak.posyandu?.nama_posyandu || 'N/A'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Activity className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-sm text-gray-600">Total Pemeriksaan</p>
+                <p className="text-xl font-bold text-gray-900">{perkembangan.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={`border-l-4 ${statusGizi ? 'border-l-orange-500' : 'border-l-gray-300'}`}>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className={`h-8 w-8 ${statusGizi ? 'text-orange-600' : 'text-gray-400'}`} />
+              <div>
+                <p className="text-sm text-gray-600">Status Gizi</p>
+                {statusGizi ? (
+                  <p className={`text-sm font-bold px-2 py-1 rounded ${statusGizi.color}`}>
+                    {statusGizi.status}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400">Belum ada data</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
+      {perkembangan.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Weight Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Weight className="h-5 w-5 text-blue-600" />
+                Grafik Berat Badan
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SimpleLineChart 
+                data={chartData}
+                dataKey="beratBadan"
+                color="#3b82f6"
+                label="Berat Badan"
+                unit="kg"
+              />
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-gray-600">Data Terkini</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {latestMeasurement?.berat_badan} kg
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {perkembangan.length > 1 && (
+                    <>
+                      {latestMeasurement.berat_badan > perkembangan[perkembangan.length - 2].berat_badan ? '↑' : '↓'}
+                      {' '}
+                      {Math.abs(latestMeasurement.berat_badan - perkembangan[perkembangan.length - 2].berat_badan).toFixed(1)} kg
+                    </>
+                  )}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Height Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Ruler className="h-5 w-5 text-green-600" />
+                Grafik Tinggi Badan
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SimpleLineChart 
+                data={chartData}
+                dataKey="tinggiBadan"
+                color="#10b981"
+                label="Tinggi Badan"
+                unit="cm"
+              />
+              <div className="mt-4 p-3 bg-green-50 rounded-lg">
+                <p className="text-xs text-gray-600">Data Terkini</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {latestMeasurement?.tinggi_badan} cm
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {perkembangan.length > 1 && (
+                    <>
+                      {latestMeasurement.tinggi_badan > perkembangan[perkembangan.length - 2].tinggi_badan ? '↑' : '↓'}
+                      {' '}
+                      {Math.abs(latestMeasurement.tinggi_badan - perkembangan[perkembangan.length - 2].tinggi_badan).toFixed(1)} cm
+                    </>
+                  )}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Head Circumference Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-5 w-5 text-purple-600" />
+                Grafik Lingkar Kepala
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SimpleLineChart 
+                data={chartData}
+                dataKey="lingkarKepala"
+                color="#8b5cf6"
+                label="Lingkar Kepala"
+                unit="cm"
+              />
+              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-xs text-gray-600">Data Terkini</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {latestMeasurement?.lingkar_kepala} cm
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {perkembangan.length > 1 && (
+                    <>
+                      {latestMeasurement.lingkar_kepala > perkembangan[perkembangan.length - 2].lingkar_kepala ? '↑' : '↓'}
+                      {' '}
+                      {Math.abs(latestMeasurement.lingkar_kepala - perkembangan[perkembangan.length - 2].lingkar_kepala).toFixed(1)} cm
+                    </>
+                  )}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <Activity className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">Belum ada data perkembangan</p>
+              <p className="text-gray-400 text-sm mt-2">
+                Data perkembangan akan muncul setelah dilakukan pemeriksaan
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* History Table */}
+      {perkembangan.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Riwayat Pemeriksaan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Tanggal</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Berat (kg)</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Tinggi (cm)</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Lingkar Kepala (cm)</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Catatan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perkembangan.slice().reverse().map((item) => (
+                    <tr key={item.id} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        {new Date(item.tanggal_pengukuran).toLocaleDateString('id-ID', {
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </td>
+                      <td className="py-3 px-4 font-medium">{item.berat_badan}</td>
+                      <td className="py-3 px-4 font-medium">{item.tinggi_badan}</td>
+                      <td className="py-3 px-4 font-medium">{item.lingkar_kepala}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">
+                        {item.catatan || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Additional Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Informasi Lengkap</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Nama Lengkap</p>
+              <p className="font-semibold text-gray-900">{anak.nama_anak}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">NIK</p>
+              <p className="font-semibold text-gray-900">{anak.nik_anak}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Tanggal Lahir</p>
+              <p className="font-semibold text-gray-900">
+                {new Date(anak.tanggal_lahir).toLocaleDateString('id-ID', {
+                  day: '2-digit',
+                  month: 'long',
+                  year: 'numeric'
+                })}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Jenis Kelamin</p>
+              <p className="font-semibold text-gray-900">
+                {anak.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Nama Orang Tua</p>
+              <p className="font-semibold text-gray-900">{anak.nama_orang_tua}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Posyandu</p>
+              <p className="font-semibold text-gray-900">
+                {anak.posyandu?.nama_posyandu || 'N/A'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+
+================================================================================
+File: dashboard\layout.tsx
+================================================================================
+
+import Navbar from '@/components/Navbar';
+import Sidebar from '@/components/Sidebar';
+import Footer from '@/components/Footer';
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Navbar />
+      
+      <div className="flex-1 flex">
+        {/* Sidebar */}
+        <Sidebar />
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-x-hidden">
+          {children}
+        </main>
+      </div>
+      
+      <Footer />
+    </div>
+  );
+}
+
+
+================================================================================
+File: dashboard\page.tsx
+================================================================================
+
+import { supabase } from "@/lib/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, Baby, UserCircle, TrendingUp } from "lucide-react";
+
+async function getDashboardStats() {
+  // Total Anak
+  const { count: totalAnak } = await supabase
+    .from("anak")
+    .select("*", { count: "exact", head: true });
+
+  // Total Posyandu (jika ada table posyandu)
+  const { count: totalPosyandu } = await supabase
+    .from("posyandu")
+    .select("*", { count: "exact", head: true });
+
+  // Total Perkembangan Records
+  const { count: totalPerkembangan } = await supabase
+    .from("perkembangan")
+    .select("*", { count: "exact", head: true });
+
+  // Data Anak Terbaru
+  const { data: anakTerbaru } = await supabase
+    .from("anak")
+    .select("id, nama_anak, nik_anak")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  return {
+    totalAnak: totalAnak || 0,
+    totalPosyandu: totalPosyandu || 0,
+    totalPerkembangan: totalPerkembangan || 0,
+    anakTerbaru: anakTerbaru || [],
+  };
+}
+
+export default async function DashboardPage() {
+  const stats = await getDashboardStats();
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-1">
+          Selamat datang di Sistem Posyandu
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Anak
+            </CardTitle>
+            <Baby className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalAnak}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Terdaftar di sistem
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Posyandu
+            </CardTitle>
+            <Users className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalPosyandu}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Posyandu aktif
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Data Perkembangan
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalPerkembangan}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Total record
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Pertumbuhan
+            </CardTitle>
+            <UserCircle className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">+12%</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Dari bulan lalu
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Data */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Anak Terbaru */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Anak Terdaftar Terbaru</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.anakTerbaru.length > 0 ? (
+                stats.anakTerbaru.map((anak) => (
+                  <div
+                    key={anak.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Baby className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {anak.nama_anak}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {anak.nik_anak}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  Belum ada data
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <a
+                href="/anak"
+                className="flex items-center justify-between p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <Baby className="h-5 w-5 text-blue-600" />
+                  <span className="font-medium text-gray-900">
+                    Lihat Semua Anak
+                  </span>
+                </div>
+                <span className="text-blue-600 group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </a>
+
+              <a
+                href="/posyandu"
+                className="flex items-center justify-between p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-gray-900">
+                    Kelola Posyandu
+                  </span>
+                </div>
+                <span className="text-green-600 group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </a>
+
+              <a
+                href="/perkembangan"
+                className="flex items-center justify-between p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                  <span className="font-medium text-gray-900">
+                    Input Perkembangan
+                  </span>
+                </div>
+                <span className="text-purple-600 group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+File: globals.css
+================================================================================
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.984 0.003 247.858);
+  --sidebar-foreground: oklch(0.129 0.042 264.695);
+  --sidebar-primary: oklch(0.208 0.042 265.755);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.968 0.007 247.896);
+  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+  --sidebar-border: oklch(0.929 0.013 255.508);
+  --sidebar-ring: oklch(0.704 0.04 256.788);
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+
+
+================================================================================
+File: layout.tsx
+================================================================================
+
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        {children}
+      </body>
+    </html>
+  );
+}
+
+
+
+================================================================================
+File: page.tsx
+================================================================================
+
+import Navbar from '@/components/Navbar';
+import HeroSection from '@/components/HeroSection';
+import FeatureSection from '@/components/FeatureSection';
+import Footer from '@/components/Footer';
+
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1">
+        <HeroSection />
+        <FeatureSection />
+      </main>
+      <Footer />
+    </div>
+  );
+}
+

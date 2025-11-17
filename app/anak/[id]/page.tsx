@@ -9,40 +9,26 @@ interface PageProps {
 }
 
 async function getAnakDetail(id: string) {
-  console.log(`[DEBUG] Fetching anak with id: ${id}`);
-  
   const { data: anak, error: anakError } = await supabase
     .from("anak")
     .select(`
       *,
-      posyandu_id (
+      posyandu:posyandu_id (
         nama_posyandu
       )
     `)
     .eq("id", id)
     .single();
 
-  if (anakError) {
-    console.error(`[ERROR] Failed to fetch anak:`, anakError.message);
+  if (anakError || !anak) {
     return null;
   }
-
-  if (!anak) {
-    console.warn(`[WARN] No anak found with id: ${id}`);
-    return null;
-  }
-
-  console.log(`[DEBUG] Successfully fetched anak:`, anak.nama_anak);
 
   const { data: perkembangan, error: perkembanganError } = await supabase
     .from("perkembangan")
     .select("*")
     .eq("anak_id", id)
-    .order("tanggal_pengukuran", { ascending: true });
-
-  if (perkembanganError) {
-    console.error(`[ERROR] Failed to fetch perkembangan:`, perkembanganError.message);
-  }
+    .order("tanggal", { ascending: true });
 
   return {
     anak,
@@ -74,7 +60,6 @@ function getStatusGizi(beratBadan: number, tinggiBadan: number) {
   return { status: "Obesitas", color: "text-red-600 bg-red-50" };
 }
 
-// Chart data type
 interface ChartData {
   tanggal: string;
   beratBadan: number;
@@ -82,7 +67,6 @@ interface ChartData {
   lingkarKepala: number;
 }
 
-// Simple SVG Line Chart Component
 function SimpleLineChart({ 
   data, 
   dataKey, 
@@ -116,11 +100,9 @@ function SimpleLineChart({
   return (
     <div className="space-y-2">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32">
-        {/* Grid lines */}
         <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
         <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
         
-        {/* Line */}
         <polyline
           points={points}
           fill="none"
@@ -130,7 +112,6 @@ function SimpleLineChart({
           strokeLinejoin="round"
         />
         
-        {/* Points */}
         {data.map((d, i) => {
           const x = (i / (data.length - 1 || 1)) * (width - padding * 2) + padding;
           const y = height - padding - ((d[dataKey] - minValue) / range) * (height - padding * 2);
@@ -140,7 +121,6 @@ function SimpleLineChart({
         })}
       </svg>
       
-      {/* Labels */}
       <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
         <div className="text-left">
           {data[0] && `${data[0][dataKey]} ${unit}`}
@@ -169,23 +149,22 @@ export default async function DetailAnakPage({ params }: PageProps) {
   const age = calculateAge(anak.tanggal_lahir);
   
   const chartData = perkembangan.map((item) => ({
-    tanggal: new Date(item.tanggal_pengukuran).toLocaleDateString('id-ID', { 
+    tanggal: new Date(item.tanggal).toLocaleDateString('id-ID', { 
       day: '2-digit', 
       month: 'short'
     }),
-    beratBadan: item.berat_badan,
-    tinggiBadan: item.tinggi_badan,
-    lingkarKepala: item.lingkar_kepala,
+    beratBadan: item.berat,
+    tinggiBadan: item.tinggi,
+    lingkarKepala: item.lila,
   }));
 
   const latestMeasurement = perkembangan[perkembangan.length - 1];
   const statusGizi = latestMeasurement 
-    ? getStatusGizi(latestMeasurement.berat_badan, latestMeasurement.tinggi_badan)
+    ? getStatusGizi(latestMeasurement.berat, latestMeasurement.tinggi)
     : null;
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      {/* Header Info */}
       <div className="flex items-start justify-between">
         <div>
           <Link 
@@ -197,12 +176,11 @@ export default async function DetailAnakPage({ params }: PageProps) {
           <h1 className="text-3xl font-bold text-gray-900">{anak.nama_anak}</h1>
           <p className="text-gray-600 mt-1">NIK: {anak.nik_anak}</p>
         </div>
-        <div className="w-16 h-16 rounded-full bg-linear-to-br from-purple-600 to-purple-800 flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center">
           <Baby className="h-8 w-8 text-white" />
         </div>
       </div>
 
-      {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="pt-6">
@@ -261,10 +239,8 @@ export default async function DetailAnakPage({ params }: PageProps) {
         </Card>
       </div>
 
-      {/* Charts */}
       {perkembangan.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Weight Chart */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -283,22 +259,19 @@ export default async function DetailAnakPage({ params }: PageProps) {
               <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                 <p className="text-xs text-gray-600">Data Terkini</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {latestMeasurement?.berat_badan} kg
+                  {latestMeasurement?.berat} kg
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {perkembangan.length > 1 && (
-                    <>
-                      {latestMeasurement.berat_badan > perkembangan[perkembangan.length - 2].berat_badan ? '↑' : '↓'}
-                      {' '}
-                      {Math.abs(latestMeasurement.berat_badan - perkembangan[perkembangan.length - 2].berat_badan).toFixed(1)} kg
-                    </>
-                  )}
-                </p>
+                {perkembangan.length > 1 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {latestMeasurement.berat > perkembangan[perkembangan.length - 2].berat ? '↑' : '↓'}
+                    {' '}
+                    {Math.abs(latestMeasurement.berat - perkembangan[perkembangan.length - 2].berat).toFixed(1)} kg
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Height Chart */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -317,27 +290,24 @@ export default async function DetailAnakPage({ params }: PageProps) {
               <div className="mt-4 p-3 bg-green-50 rounded-lg">
                 <p className="text-xs text-gray-600">Data Terkini</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {latestMeasurement?.tinggi_badan} cm
+                  {latestMeasurement?.tinggi} cm
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {perkembangan.length > 1 && (
-                    <>
-                      {latestMeasurement.tinggi_badan > perkembangan[perkembangan.length - 2].tinggi_badan ? '↑' : '↓'}
-                      {' '}
-                      {Math.abs(latestMeasurement.tinggi_badan - perkembangan[perkembangan.length - 2].tinggi_badan).toFixed(1)} cm
-                    </>
-                  )}
-                </p>
+                {perkembangan.length > 1 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {latestMeasurement.tinggi > perkembangan[perkembangan.length - 2].tinggi ? '↑' : '↓'}
+                    {' '}
+                    {Math.abs(latestMeasurement.tinggi - perkembangan[perkembangan.length - 2].tinggi).toFixed(1)} cm
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Head Circumference Chart */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="h-5 w-5 text-purple-600" />
-                Grafik Lingkar Kepala
+                Grafik Lingkar Lengan
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -345,23 +315,21 @@ export default async function DetailAnakPage({ params }: PageProps) {
                 data={chartData}
                 dataKey="lingkarKepala"
                 color="#8b5cf6"
-                label="Lingkar Kepala"
+                label="LILA"
                 unit="cm"
               />
               <div className="mt-4 p-3 bg-purple-50 rounded-lg">
                 <p className="text-xs text-gray-600">Data Terkini</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {latestMeasurement?.lingkar_kepala} cm
+                  {latestMeasurement?.lila} cm
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {perkembangan.length > 1 && (
-                    <>
-                      {latestMeasurement.lingkar_kepala > perkembangan[perkembangan.length - 2].lingkar_kepala ? '↑' : '↓'}
-                      {' '}
-                      {Math.abs(latestMeasurement.lingkar_kepala - perkembangan[perkembangan.length - 2].lingkar_kepala).toFixed(1)} cm
-                    </>
-                  )}
-                </p>
+                {perkembangan.length > 1 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {latestMeasurement.lila > perkembangan[perkembangan.length - 2].lila ? '↑' : '↓'}
+                    {' '}
+                    {Math.abs(latestMeasurement.lila - perkembangan[perkembangan.length - 2].lila).toFixed(1)} cm
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -380,7 +348,6 @@ export default async function DetailAnakPage({ params }: PageProps) {
         </Card>
       )}
 
-      {/* History Table */}
       {perkembangan.length > 0 && (
         <Card>
           <CardHeader>
@@ -394,26 +361,28 @@ export default async function DetailAnakPage({ params }: PageProps) {
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Tanggal</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Berat (kg)</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Tinggi (cm)</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Lingkar Kepala (cm)</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Catatan</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">LILA (cm)</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Cara Ukur</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Vitamin</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Keterangan</th>
                   </tr>
                 </thead>
                 <tbody>
                   {perkembangan.slice().reverse().map((item) => (
                     <tr key={item.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">
-                        {new Date(item.tanggal_pengukuran).toLocaleDateString('id-ID', {
+                        {new Date(item.tanggal).toLocaleDateString('id-ID', {
                           day: '2-digit',
                           month: 'long',
                           year: 'numeric'
                         })}
                       </td>
-                      <td className="py-3 px-4 font-medium">{item.berat_badan}</td>
-                      <td className="py-3 px-4 font-medium">{item.tinggi_badan}</td>
-                      <td className="py-3 px-4 font-medium">{item.lingkar_kepala}</td>
-                      <td className="py-3 px-4 text-gray-600 text-sm">
-                        {item.catatan || '-'}
-                      </td>
+                      <td className="py-3 px-4 font-medium">{item.berat}</td>
+                      <td className="py-3 px-4 font-medium">{item.tinggi}</td>
+                      <td className="py-3 px-4 font-medium">{item.lila}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">{item.cara_ukur || '-'}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">{item.vitamin || '-'}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">{item.keterangan || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -423,7 +392,6 @@ export default async function DetailAnakPage({ params }: PageProps) {
         </Card>
       )}
 
-      {/* Additional Info */}
       <Card>
         <CardHeader>
           <CardTitle>Informasi Lengkap</CardTitle>
@@ -451,12 +419,12 @@ export default async function DetailAnakPage({ params }: PageProps) {
             <div>
               <p className="text-sm text-gray-600 mb-1">Jenis Kelamin</p>
               <p className="font-semibold text-gray-900">
-                {anak.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+                {anak.jenis_kelamin === 'Laki-laki' ? 'Laki-laki' : 'Perempuan'}
               </p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">Nama Orang Tua</p>
-              <p className="font-semibold text-gray-900">{anak.nama_orang_tua}</p>
+              <p className="font-semibold text-gray-900">{anak.nama_orang_tua || '-'}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">Posyandu</p>
