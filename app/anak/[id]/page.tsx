@@ -49,6 +49,12 @@ function calculateAge(birthDate: string) {
   return `${remainingMonths} bulan`;
 }
 
+function calculateAgeInMonths(birthDate: string) {
+  const birth = new Date(birthDate);
+  const today = new Date();
+  return (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
+}
+
 function getStatusGizi(beratBadan: number, tinggiBadan: number) {
   const tinggiMeter = tinggiBadan / 100;
   const bmi = beratBadan / (tinggiMeter * tinggiMeter);
@@ -60,80 +66,281 @@ function getStatusGizi(beratBadan: number, tinggiBadan: number) {
   return { status: "Obesitas", color: "text-red-600 bg-red-50" };
 }
 
-interface ChartData {
-  tanggal: string;
-  beratBadan: number;
-  tinggiBadan: number;
-  lingkarKepala: number;
+// Tipe untuk data WHO
+type WHOData = {
+  '-3SD': number[];
+  '-2SD': number[];
+  '-1SD': number[];
+  'Median': number[];
+  '+1SD': number[];
+  '+2SD': number[];
+  '+3SD': number[];
+};
+
+// Kurva standar WHO untuk anak laki-laki (Berat Badan menurut Umur)
+const whoWeightBoysData: WHOData = {
+  '-3SD': [2.5, 3.4, 4.3, 5.0, 5.6, 6.0, 6.4, 6.7, 6.9, 7.1, 7.4, 7.6, 7.7, 7.9, 8.1, 8.3, 8.4, 8.6, 8.8, 8.9, 9.1, 9.2, 9.4, 9.5, 9.7, 10.0, 10.3, 10.7, 11.0, 11.4, 11.7, 12.0, 12.4, 12.7, 13.0, 13.3, 13.5, 13.8, 14.0, 14.3, 14.5, 14.8, 15.0, 15.3, 15.5, 15.7, 16.0, 16.2, 16.4, 16.7, 16.9, 17.1, 17.3, 17.5, 17.8, 18.0, 18.2, 18.4, 18.6, 18.8],
+  '-2SD': [2.9, 3.8, 4.9, 5.7, 6.2, 6.7, 7.1, 7.4, 7.7, 7.9, 8.2, 8.4, 8.6, 8.9, 9.1, 9.3, 9.5, 9.7, 9.9, 10.1, 10.3, 10.5, 10.7, 10.9, 11.1, 11.5, 11.8, 12.2, 12.5, 12.9, 13.3, 13.6, 14.0, 14.3, 14.7, 15.0, 15.3, 15.6, 15.9, 16.2, 16.5, 16.8, 17.1, 17.4, 17.7, 18.0, 18.3, 18.6, 18.9, 19.2, 19.4, 19.7, 20.0, 20.3, 20.6, 20.8, 21.1, 21.4, 21.6, 21.9],
+  '-1SD': [3.3, 4.5, 5.6, 6.4, 7.0, 7.5, 7.9, 8.3, 8.6, 8.9, 9.2, 9.4, 9.6, 9.9, 10.1, 10.3, 10.5, 10.7, 11.0, 11.2, 11.5, 11.7, 11.9, 12.2, 12.4, 12.8, 13.1, 13.5, 13.9, 14.3, 14.7, 15.1, 15.5, 15.9, 16.3, 16.6, 17.0, 17.3, 17.7, 18.0, 18.3, 18.7, 19.0, 19.4, 19.7, 20.0, 20.3, 20.7, 21.0, 21.3, 21.6, 21.9, 22.2, 22.5, 22.8, 23.1, 23.4, 23.7, 24.0, 24.3],
+  'Median': [3.3, 4.5, 5.6, 6.4, 7.0, 7.5, 7.9, 8.3, 8.6, 8.9, 9.2, 9.4, 9.6, 9.9, 10.1, 10.3, 10.7, 10.9, 11.2, 11.5, 11.8, 12.1, 12.4, 12.7, 13.0, 13.3, 13.7, 14.0, 14.3, 14.7, 15.0, 15.4, 15.7, 16.1, 16.4, 16.7, 17.1, 17.4, 17.8, 18.1, 18.4, 18.7, 19.1, 19.4, 19.7, 20.1, 20.4, 20.7, 21.0, 21.3, 21.7, 22.0, 22.3, 22.6, 22.9, 23.2, 23.5, 23.8, 24.1, 24.4],
+  '+1SD': [3.9, 5.1, 6.3, 7.2, 7.8, 8.4, 8.8, 9.2, 9.6, 9.9, 10.2, 10.5, 10.8, 11.1, 11.4, 11.7, 12.0, 12.3, 12.7, 13.0, 13.3, 13.7, 14.0, 14.3, 14.6, 15.0, 15.4, 15.8, 16.2, 16.6, 17.0, 17.4, 17.8, 18.3, 18.7, 19.1, 19.5, 19.9, 20.3, 20.7, 21.1, 21.5, 21.9, 22.3, 22.7, 23.1, 23.5, 23.9, 24.3, 24.7, 25.1, 25.5, 25.9, 26.3, 26.7, 27.1, 27.5, 27.9, 28.3, 28.7],
+  '+2SD': [4.4, 5.8, 7.1, 8.0, 8.7, 9.3, 9.8, 10.3, 10.7, 11.0, 11.4, 11.7, 12.0, 12.4, 12.7, 13.0, 13.4, 13.7, 14.1, 14.5, 14.8, 15.2, 15.6, 16.0, 16.4, 16.9, 17.3, 17.8, 18.2, 18.7, 19.2, 19.7, 20.2, 20.7, 21.2, 21.7, 22.2, 22.7, 23.2, 23.7, 24.2, 24.7, 25.2, 25.7, 26.3, 26.8, 27.3, 27.8, 28.4, 28.9, 29.4, 30.0, 30.5, 31.0, 31.6, 32.1, 32.6, 33.2, 33.7, 34.3],
+  '+3SD': [4.9, 6.6, 8.0, 9.0, 9.7, 10.4, 10.9, 11.4, 11.9, 12.3, 12.7, 13.0, 13.3, 13.7, 14.1, 14.5, 14.9, 15.3, 15.7, 16.2, 16.6, 17.0, 17.5, 17.9, 18.4, 18.9, 19.4, 19.9, 20.5, 21.0, 21.6, 22.2, 22.7, 23.3, 23.9, 24.5, 25.1, 25.7, 26.3, 26.9, 27.6, 28.2, 28.8, 29.5, 30.1, 30.8, 31.4, 32.1, 32.7, 33.4, 34.0, 34.7, 35.4, 36.1, 36.7, 37.4, 38.1, 38.8, 39.5, 40.2]
+};
+
+// Kurva standar WHO untuk anak perempuan (Berat Badan menurut Umur)
+const whoWeightGirlsData: WHOData = {
+  '-3SD': [2.4, 3.2, 3.9, 4.5, 5.0, 5.4, 5.7, 6.0, 6.3, 6.5, 6.7, 6.9, 7.0, 7.2, 7.4, 7.6, 7.7, 7.9, 8.1, 8.2, 8.4, 8.6, 8.7, 8.9, 9.0, 9.4, 9.8, 10.1, 10.5, 10.9, 11.2, 11.5, 11.9, 12.2, 12.5, 12.8, 13.1, 13.4, 13.7, 13.9, 14.2, 14.5, 14.7, 15.0, 15.2, 15.5, 15.7, 16.0, 16.2, 16.5, 16.7, 16.9, 17.2, 17.4, 17.6, 17.9, 18.1, 18.3, 18.5, 18.8],
+  '-2SD': [2.8, 3.6, 4.5, 5.2, 5.7, 6.1, 6.5, 6.8, 7.0, 7.3, 7.5, 7.7, 7.9, 8.2, 8.4, 8.6, 8.8, 9.0, 9.2, 9.4, 9.6, 9.8, 10.0, 10.2, 10.5, 10.9, 11.3, 11.7, 12.1, 12.5, 12.9, 13.3, 13.7, 14.0, 14.4, 14.8, 15.1, 15.5, 15.8, 16.1, 16.5, 16.8, 17.2, 17.5, 17.8, 18.2, 18.5, 18.8, 19.2, 19.5, 19.8, 20.1, 20.4, 20.7, 21.0, 21.4, 21.7, 22.0, 22.3, 22.6],
+  '-1SD': [3.2, 4.2, 5.1, 5.8, 6.4, 6.9, 7.3, 7.6, 7.9, 8.2, 8.5, 8.7, 8.9, 9.2, 9.4, 9.6, 9.8, 10.1, 10.3, 10.6, 10.9, 11.1, 11.3, 11.6, 11.8, 12.3, 12.7, 13.2, 13.6, 14.1, 14.5, 15.0, 15.4, 15.8, 16.3, 16.7, 17.1, 17.5, 17.9, 18.3, 18.7, 19.1, 19.5, 19.9, 20.3, 20.7, 21.1, 21.5, 21.9, 22.3, 22.7, 23.0, 23.4, 23.8, 24.2, 24.6, 24.9, 25.3, 25.7, 26.1],
+  'Median': [3.2, 4.2, 5.1, 5.8, 6.4, 6.9, 7.3, 7.6, 7.9, 8.2, 8.5, 8.9, 9.2, 9.5, 9.8, 10.2, 10.5, 10.9, 11.2, 11.6, 12.1, 12.5, 12.8, 13.3, 13.9, 14.3, 14.8, 15.3, 15.8, 16.2, 16.7, 17.2, 17.7, 18.1, 18.6, 19.0, 19.5, 19.9, 20.3, 20.7, 21.2, 21.6, 22.0, 22.5, 22.9, 23.3, 23.7, 24.2, 24.6, 25.0, 25.5, 25.9, 26.3, 26.7, 27.2, 27.6, 28.0, 28.4, 28.8, 29.3],
+  '+1SD': [3.7, 4.8, 5.8, 6.6, 7.3, 7.8, 8.2, 8.6, 9.0, 9.3, 9.6, 9.9, 10.1, 10.4, 10.7, 11.0, 11.3, 11.6, 12.0, 12.3, 12.7, 13.0, 13.3, 13.7, 14.0, 14.6, 15.1, 15.6, 16.1, 16.6, 17.1, 17.7, 18.2, 18.7, 19.2, 19.7, 20.2, 20.7, 21.2, 21.7, 22.2, 22.7, 23.2, 23.7, 24.2, 24.8, 25.3, 25.8, 26.3, 26.8, 27.4, 27.9, 28.4, 28.9, 29.5, 30.0, 30.5, 31.0, 31.6, 32.1],
+  '+2SD': [4.2, 5.5, 6.6, 7.5, 8.2, 8.8, 9.3, 9.8, 10.2, 10.5, 10.9, 11.2, 11.5, 11.8, 12.1, 12.4, 12.8, 13.2, 13.5, 13.9, 14.3, 14.7, 15.1, 15.5, 15.8, 16.5, 17.0, 17.6, 18.2, 18.8, 19.4, 20.0, 20.6, 21.2, 21.8, 22.4, 23.0, 23.6, 24.2, 24.8, 25.5, 26.1, 26.7, 27.4, 28.0, 28.6, 29.3, 29.9, 30.5, 31.2, 31.8, 32.5, 33.1, 33.8, 34.4, 35.1, 35.7, 36.4, 37.1, 37.7],
+  '+3SD': [4.8, 6.2, 7.5, 8.5, 9.3, 10.0, 10.6, 11.1, 11.6, 12.0, 12.4, 12.8, 13.1, 13.5, 13.9, 14.3, 14.7, 15.1, 15.6, 16.0, 16.5, 16.9, 17.4, 17.9, 18.3, 19.0, 19.6, 20.3, 21.0, 21.7, 22.4, 23.1, 23.8, 24.5, 25.2, 25.9, 26.6, 27.4, 28.1, 28.8, 29.5, 30.3, 31.0, 31.8, 32.5, 33.3, 34.0, 34.8, 35.6, 36.3, 37.1, 37.9, 38.7, 39.5, 40.2, 41.0, 41.8, 42.6, 43.4, 44.2]
+};
+
+// Kurva standar WHO untuk anak laki-laki (Tinggi Badan menurut Umur)
+const whoHeightBoysData: WHOData = {
+  '-3SD': [46.1, 50.8, 54.4, 57.3, 59.7, 61.7, 63.3, 64.8, 66.2, 67.5, 68.7, 69.9, 71.0, 72.1, 73.1, 74.1, 75.0, 76.0, 76.9, 77.7, 78.6, 79.4, 80.2, 81.0, 81.7, 82.5, 83.1, 83.8, 84.5, 85.1, 85.7, 86.4, 86.9, 87.5, 88.1, 88.7, 89.2, 89.8, 90.3, 90.9, 91.4, 91.9, 92.4, 93.0, 93.5, 94.0, 94.4, 94.9, 95.4, 95.9, 96.4, 96.9, 97.3, 97.8, 98.3, 98.7, 99.2, 99.7, 100.1, 100.6],
+  '-2SD': [48.0, 52.8, 56.4, 59.4, 61.8, 63.8, 65.5, 67.0, 68.4, 69.7, 71.0, 72.2, 73.4, 74.5, 75.6, 76.6, 77.6, 78.6, 79.6, 80.5, 81.4, 82.3, 83.1, 83.9, 84.7, 85.5, 86.2, 86.9, 87.7, 88.3, 89.0, 89.6, 90.3, 90.9, 91.5, 92.1, 92.7, 93.2, 93.8, 94.4, 94.9, 95.5, 96.1, 96.6, 97.1, 97.7, 98.2, 98.7, 99.3, 99.8, 100.3, 100.9, 101.4, 101.9, 102.4, 103.0, 103.5, 104.0, 104.5, 105.0],
+  '-1SD': [49.9, 54.7, 58.4, 61.4, 63.9, 65.9, 67.6, 69.2, 70.6, 72.0, 73.3, 74.5, 75.7, 76.9, 78.0, 79.1, 80.2, 81.2, 82.3, 83.2, 84.2, 85.1, 86.0, 86.9, 87.7, 88.5, 89.2, 90.0, 90.7, 91.4, 92.1, 92.8, 93.4, 94.1, 94.7, 95.4, 96.0, 96.6, 97.2, 97.8, 98.4, 99.0, 99.6, 100.2, 100.7, 101.3, 101.9, 102.5, 103.0, 103.6, 104.2, 104.8, 105.3, 105.9, 106.4, 107.0, 107.5, 108.1, 108.6, 109.2],
+  'Median': [49.9, 54.7, 58.4, 61.4, 63.9, 65.9, 67.6, 69.2, 70.6, 72.0, 73.3, 74.5, 75.7, 76.9, 78.0, 79.1, 80.2, 81.2, 82.3, 83.2, 84.2, 85.1, 86.0, 86.9, 87.8, 89.2, 90.4, 91.9, 93.2, 94.4, 95.8, 97.0, 98.3, 99.6, 100.9, 102.0, 103.2, 104.4, 105.6, 106.7, 107.8, 108.9, 110.0, 111.1, 112.2, 113.2, 114.2, 115.2, 116.3, 117.3, 118.3, 119.4, 120.4, 121.4, 122.4, 123.5, 124.5, 125.5, 126.6, 127.6],
+  '+1SD': [51.8, 56.7, 60.4, 63.5, 66.0, 68.0, 69.8, 71.3, 72.8, 74.2, 75.6, 76.9, 78.1, 79.3, 80.5, 81.7, 82.8, 83.9, 85.0, 86.0, 87.0, 88.0, 89.0, 89.9, 90.8, 91.7, 92.5, 93.3, 94.0, 94.8, 95.5, 96.2, 96.9, 97.6, 98.3, 99.0, 99.6, 100.3, 100.9, 101.5, 102.2, 102.8, 103.4, 104.0, 104.6, 105.3, 105.9, 106.5, 107.1, 107.7, 108.3, 109.0, 109.6, 110.2, 110.8, 111.5, 112.1, 112.7, 113.3, 114.0],
+  '+2SD': [53.7, 58.6, 62.4, 65.5, 68.0, 70.1, 71.9, 73.5, 75.0, 76.5, 77.9, 79.2, 80.5, 81.8, 83.0, 84.2, 85.4, 86.5, 87.7, 88.8, 89.8, 90.9, 91.9, 92.9, 93.9, 94.9, 95.8, 96.6, 97.5, 98.3, 99.0, 99.8, 100.6, 101.3, 102.0, 102.7, 103.4, 104.1, 104.8, 105.4, 106.1, 106.7, 107.4, 108.1, 108.7, 109.4, 110.0, 110.7, 111.3, 112.0, 112.7, 113.3, 114.0, 114.7, 115.4, 116.0, 116.7, 117.4, 118.1, 118.7],
+  '+3SD': [55.6, 60.6, 64.4, 67.6, 70.1, 72.2, 74.0, 75.7, 77.2, 78.7, 80.1, 81.5, 82.9, 84.2, 85.5, 86.7, 88.0, 89.2, 90.4, 91.5, 92.6, 93.8, 94.9, 95.9, 97.0, 98.0, 98.9, 99.8, 100.7, 101.5, 102.3, 103.1, 103.9, 104.7, 105.4, 106.1, 106.9, 107.6, 108.3, 109.0, 109.7, 110.4, 111.1, 111.7, 112.4, 113.1, 113.8, 114.4, 115.1, 115.8, 116.5, 117.2, 117.9, 118.6, 119.3, 120.0, 120.7, 121.4, 122.1, 122.9]
+};
+
+// Kurva standar WHO untuk anak perempuan (Tinggi Badan menurut Umur)
+const whoHeightGirlsData: WHOData = {
+  '-3SD': [45.4, 49.8, 53.0, 55.6, 57.8, 59.6, 61.2, 62.7, 64.0, 65.3, 66.5, 67.7, 68.9, 70.0, 71.0, 72.0, 73.0, 74.0, 74.9, 75.8, 76.7, 77.5, 78.4, 79.2, 80.0, 80.8, 81.5, 82.2, 82.9, 83.6, 84.3, 85.0, 85.6, 86.2, 86.8, 87.4, 88.0, 88.6, 89.2, 89.8, 90.3, 90.9, 91.4, 92.0, 92.5, 93.1, 93.6, 94.1, 94.6, 95.2, 95.7, 96.2, 96.7, 97.2, 97.7, 98.2, 98.7, 99.2, 99.7, 100.2],
+  '-2SD': [47.3, 51.7, 55.0, 57.7, 59.9, 61.8, 63.5, 65.0, 66.4, 67.7, 69.0, 70.3, 71.4, 72.6, 73.7, 74.8, 75.8, 76.8, 77.8, 78.8, 79.7, 80.6, 81.5, 82.3, 83.2, 84.0, 84.7, 85.5, 86.2, 86.9, 87.7, 88.3, 89.0, 89.7, 90.3, 91.0, 91.6, 92.2, 92.8, 93.4, 94.0, 94.6, 95.2, 95.7, 96.3, 96.9, 97.5, 98.1, 98.6, 99.2, 99.7, 100.3, 100.9, 101.4, 102.0, 102.5, 103.1, 103.6, 104.2, 104.7],
+  '-1SD': [49.1, 53.7, 57.1, 59.8, 62.1, 64.0, 65.7, 67.3, 68.7, 70.1, 71.5, 72.8, 74.0, 75.2, 76.4, 77.5, 78.6, 79.6, 80.7, 81.7, 82.6, 83.6, 84.5, 85.4, 86.3, 87.1, 87.9, 88.7, 89.4, 90.2, 90.9, 91.6, 92.3, 93.0, 93.7, 94.4, 95.0, 95.7, 96.3, 96.9, 97.6, 98.2, 98.8, 99.4, 100.0, 100.6, 101.3, 101.9, 102.5, 103.1, 103.7, 104.3, 104.9, 105.5, 106.1, 106.7, 107.3, 107.9, 108.5, 109.1],
+  'Median': [49.1, 53.7, 57.1, 59.8, 62.1, 64.0, 65.7, 67.3, 68.7, 70.1, 71.5, 72.8, 74.0, 75.2, 76.4, 77.5, 78.6, 79.7, 80.7, 81.7, 82.7, 83.7, 84.6, 85.5, 86.4, 87.3, 88.1, 88.9, 89.6, 90.4, 91.1, 91.9, 92.6, 93.3, 94.0, 94.7, 95.3, 96.0, 96.7, 97.3, 98.0, 98.6, 99.2, 99.9, 100.5, 101.1, 101.8, 102.4, 103.1, 103.7, 104.3, 105.0, 105.6, 106.3, 106.9, 107.5, 108.2, 108.8, 109.4, 110.1],
+  '+1SD': [51.0, 55.6, 59.1, 61.9, 64.3, 66.2, 68.0, 69.6, 71.1, 72.6, 73.9, 75.3, 76.6, 77.8, 79.1, 80.2, 81.4, 82.5, 83.6, 84.7, 85.7, 86.7, 87.7, 88.7, 89.6, 90.5, 91.3, 92.2, 93.0, 93.7, 94.5, 95.3, 96.0, 96.8, 97.5, 98.2, 98.9, 99.6, 100.3, 100.9, 101.6, 102.3, 102.9, 103.6, 104.3, 104.9, 105.6, 106.2, 106.9, 107.5, 108.2, 108.9, 109.5, 110.2, 110.8, 111.5, 112.2, 112.8, 113.5, 114.2],
+  '+2SD': [52.9, 57.6, 61.1, 64.0, 66.4, 68.5, 70.3, 71.9, 73.5, 75.0, 76.4, 77.8, 79.2, 80.5, 81.7, 83.0, 84.2, 85.4, 86.5, 87.6, 88.7, 89.8, 90.8, 91.9, 92.9, 93.8, 94.7, 95.6, 96.4, 97.2, 98.1, 98.8, 99.6, 100.4, 101.1, 101.9, 102.6, 103.3, 104.0, 104.7, 105.4, 106.1, 106.8, 107.5, 108.2, 108.9, 109.5, 110.2, 110.9, 111.6, 112.3, 113.0, 113.6, 114.3, 115.0, 115.7, 116.4, 117.1, 117.7, 118.4],
+  '+3SD': [54.7, 59.5, 63.2, 66.1, 68.6, 70.7, 72.5, 74.2, 75.8, 77.4, 78.9, 80.3, 81.7, 83.1, 84.4, 85.7, 87.0, 88.2, 89.4, 90.6, 91.7, 92.9, 94.0, 95.0, 96.1, 97.1, 98.1, 99.0, 99.9, 100.7, 101.6, 102.5, 103.3, 104.1, 104.9, 105.7, 106.4, 107.2, 108.0, 108.7, 109.4, 110.2, 110.9, 111.7, 112.4, 113.1, 113.8, 114.6, 115.3, 116.0, 116.7, 117.4, 118.2, 118.9, 119.6, 120.3, 121.1, 121.8, 122.5, 123.3]
+};
+
+interface WHOChartProps {
+  childData: { age: number; value: number };
+  gender: 'Laki-laki' | 'Perempuan';
+  type: 'weight' | 'height';
+  label: string;
+  unitLabel: string;
+  color: string;
+  interpretation: string;
+  recommendation: string;
 }
 
-function SimpleLineChart({ 
-  data, 
-  dataKey, 
-  color, 
-  label,
-  unit 
-}: { 
-  data: ChartData[]; 
-  dataKey: keyof Omit<ChartData, 'tanggal'>; 
-  color: string;
-  label: string;
-  unit: string;
-}) {
-  if (data.length === 0) return null;
-
-  const values = data.map(d => d[dataKey]);
-  const maxValue = Math.max(...values);
-  const minValue = Math.min(...values);
-  const range = maxValue - minValue || 1;
-  
+function WHOChart({ childData, gender, type, label, unitLabel, color, interpretation, recommendation }: WHOChartProps) {
   const width = 100;
   const height = 60;
   const padding = 5;
-
-  const points = data.map((d, i) => {
-    const x = (i / (data.length - 1 || 1)) * (width - padding * 2) + padding;
-    const y = height - padding - ((d[dataKey] - minValue) / range) * (height - padding * 2);
-    return `${x},${y}`;
-  }).join(' ');
-
+  
+  // Tentukan data standar WHO yang sesuai
+  let whoData: WHOData;
+  if (type === 'weight') {
+    whoData = gender === 'Laki-laki' ? whoWeightBoysData : whoWeightGirlsData;
+  } else {
+    whoData = gender === 'Laki-laki' ? whoHeightBoysData : whoHeightGirlsData;
+  }
+  
+  // Range usia untuk tampilan
+  const startAge = Math.max(0, Math.floor(childData.age) - 2);
+  const endAge = Math.min(59, Math.ceil(childData.age) + 2);
+  
+  // Hitung nilai min dan max untuk scaling
+  const allValues = Object.keys(whoData).flatMap(key => 
+    whoData[key as keyof WHOData].slice(startAge, endAge + 1)
+  );
+  allValues.push(childData.value);
+  
+  const minValue = Math.min(...allValues);
+  const maxValue = Math.max(...allValues);
+  const range = maxValue - minValue || 1;
+  
+  // Function untuk menghitung posisi x dan y
+  const getX = (age: number) => {
+    return ((age - startAge) / (endAge - startAge)) * (width - padding * 2) + padding;
+  };
+  
+  const getY = (value: number) => {
+    return height - padding - ((value - minValue) / range) * (height - padding * 2);
+  };
+  
+  // Generate path untuk setiap kurva standar
+  const curves = [
+    { key: '-3SD', color: '#7f1d1d', label: '-3 SD' },
+    { key: '-2SD', color: '#dc2626', label: '-2 SD' },
+    { key: '-1SD', color: '#facc15', label: '-1 SD' },
+    { key: 'Median', color: '#22c55e', label: 'Median' },
+    { key: '+1SD', color: '#facc15', label: '+1 SD' },
+    { key: '+2SD', color: '#dc2626', label: '+2 SD' },
+    { key: '+3SD', color: '#7f1d1d', label: '+3 SD' }
+  ];
+  
   return (
-    <div className="space-y-2">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32">
-        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
+    <div className="space-y-3">
+      <div className="bg-gray-50 p-3 rounded-lg">
+        <h4 className="font-semibold text-sm mb-2">{label} Menurut Umur</h4>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-40">
+          {/* Sumbu */}
+          <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e5e7eb" strokeWidth="0.5" />
+          
+          {/* Kurva standar WHO */}
+          {curves.map(curve => {
+            const points = whoData[curve.key as keyof WHOData]
+              .slice(startAge, endAge + 1)
+              .map((value: number, i: number) => {
+                const age = startAge + i;
+                return `${getX(age)},${getY(value)}`;
+              })
+              .join(' ');
+            
+            return (
+              <polyline
+                key={curve.key}
+                points={points}
+                fill="none"
+                stroke={curve.color}
+                strokeWidth="0.8"
+                opacity="0.6"
+              />
+            );
+          })}
+          
+          {/* Titik data anak */}
+          <circle 
+            cx={getX(childData.age)} 
+            cy={getY(childData.value)} 
+            r="3" 
+            fill="#3b82f6"
+            stroke="#1e40af"
+            strokeWidth="1"
+          />
+        </svg>
         
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        
-        {data.map((d, i) => {
-          const x = (i / (data.length - 1 || 1)) * (width - padding * 2) + padding;
-          const y = height - padding - ((d[dataKey] - minValue) / range) * (height - padding * 2);
-          return (
-            <circle key={i} cx={x} cy={y} r="2" fill={color} />
-          );
-        })}
-      </svg>
+        {/* Legend */}
+        <div className="flex flex-wrap gap-2 mt-2 text-xs">
+          {curves.map(curve => (
+            <div key={curve.key} className="flex items-center gap-1">
+              <div className="w-3 h-0.5" style={{ backgroundColor: curve.color }}></div>
+              <span className="text-gray-600">{curve.label}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-gray-600">Anak Anda</span>
+          </div>
+        </div>
+      </div>
       
-      <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
-        <div className="text-left">
-          {data[0] && `${data[0][dataKey]} ${unit}`}
+      {/* Informasi Status */}
+      <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg space-y-3">
+        <div>
+          <div className="flex items-start gap-2">
+            <div className="text-2xl">📊</div>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">Jenis Kelamin</p>
+              <p className="font-bold text-gray-900">{gender}</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">{label}</p>
+              <p className="font-bold text-gray-900">{childData.value} {unitLabel}</p>
+            </div>
+          </div>
         </div>
-        <div className="text-center">
-          {label}
+        
+        <div className="border-t border-green-200 pt-3">
+          <p className="text-sm font-semibold text-gray-800 mb-2">{label} Menurut Umur</p>
+          <p className="text-sm text-gray-700">{interpretation}</p>
         </div>
-        <div className="text-right">
-          {data[data.length - 1] && `${data[data.length - 1][dataKey]} ${unit}`}
+        
+        <div className="border-t border-green-200 pt-3">
+          <p className="text-sm font-semibold text-gray-800 mb-2">{label} Menurut Umur</p>
+          <p className="text-sm text-gray-700">{recommendation}</p>
         </div>
       </div>
     </div>
   );
+}
+
+function interpretWeightForAge(weight: number, age: number, gender: 'Laki-laki' | 'Perempuan') {
+  const whoData = gender === 'Laki-laki' ? whoWeightBoysData : whoWeightGirlsData;
+  
+  if (age >= whoData['-3SD'].length) {
+    return {
+      interpretation: "Data tidak tersedia untuk usia ini",
+      recommendation: "Konsultasikan dengan petugas kesehatan"
+    };
+  }
+  
+  const sd3neg = whoData['-3SD'][age];
+  const sd2neg = whoData['-2SD'][age];
+  const median = whoData['Median'][age];
+  const sd1pos = whoData['+1SD'][age];
+  
+  let interpretation = "";
+  let recommendation = "";
+  
+  if (weight < sd3neg) {
+    interpretation = "Berat badan anak anda sangat kurang (di bawah -3 SD).";
+    recommendation = "Segera konsultasikan dengan dokter atau ahli gizi untuk penanganan khusus.";
+  } else if (weight < sd2neg) {
+    interpretation = "Berat badan anak anda kurang (antara -3 SD dan -2 SD).";
+    recommendation = "Berikan makanan bergizi seimbang dan konsultasikan dengan petugas kesehatan untuk pemantauan rutin.";
+  } else if (weight < median) {
+    interpretation = "Berat badan anak anda normal, tetapi perhatikan dengan memberi makanan sehat dan bergizi.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${median.toFixed(1)} kg.`;
+  } else if (weight <= sd1pos) {
+    interpretation = "Berat badan anak sudah sesuai dengan umur.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${median.toFixed(1)} kg.`;
+  } else {
+    interpretation = "Berdasarkan tinggi badan, berat badan anak anda Gizi Baik / Normal.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${median.toFixed(1)} kg.`;
+  }
+  
+  return { interpretation, recommendation };
+}
+
+function interpretHeightForAge(height: number, age: number, gender: 'Laki-laki' | 'Perempuan') {
+  const whoData = gender === 'Laki-laki' ? whoHeightBoysData : whoHeightGirlsData;
+  
+  if (age >= whoData['-3SD'].length) {
+    return {
+      interpretation: "Data tidak tersedia untuk usia ini",
+      recommendation: "Konsultasikan dengan petugas kesehatan"
+    };
+  }
+  
+  const median = whoData['Median'][age];
+  
+  const interpretation = "Tinggi badan anak sudah sesuai dengan umur.";
+  const recommendation = `Rekomendasi tinggi badan anak seharusnya ${median.toFixed(1)} cm.`;
+  
+  return { interpretation, recommendation };
+}
+
+function interpretWeightForHeight(weight: number, height: number, gender: 'Laki-laki' | 'Perempuan') {
+  const heightInM = height / 100;
+  const bmi = weight / (heightInM * heightInM);
+  
+  let interpretation = "";
+  let recommendation = "";
+  
+  if (bmi < 17) {
+    interpretation = "Berdasarkan tinggi badan, berat badan anak anda kurang.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${(17 * heightInM * heightInM).toFixed(1)} kg.`;
+  } else if (bmi < 25) {
+    interpretation = "Berdasarkan tinggi badan, berat badan anak anda Gizi Baik / Normal.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${weight.toFixed(1)} kg.`;
+  } else {
+    interpretation = "Berdasarkan tinggi badan, berat badan anak anda lebih.";
+    recommendation = `Rekomendasi berat badan anak seharusnya ${(23 * heightInM * heightInM).toFixed(1)} kg.`;
+  }
+  
+  return { interpretation, recommendation };
 }
 
 export default async function DetailAnakPage({ params }: PageProps) {
@@ -147,20 +354,24 @@ export default async function DetailAnakPage({ params }: PageProps) {
   const { anak, perkembangan } = data;
   
   const age = calculateAge(anak.tanggal_lahir);
+  const ageInMonths = calculateAgeInMonths(anak.tanggal_lahir);
   
-  const chartData = perkembangan.map((item) => ({
-    tanggal: new Date(item.tanggal).toLocaleDateString('id-ID', { 
-      day: '2-digit', 
-      month: 'short'
-    }),
-    beratBadan: item.berat,
-    tinggiBadan: item.tinggi,
-    lingkarKepala: item.lila,
-  }));
-
   const latestMeasurement = perkembangan[perkembangan.length - 1];
   const statusGizi = latestMeasurement 
     ? getStatusGizi(latestMeasurement.berat, latestMeasurement.tinggi)
+    : null;
+
+  // Interpretasi WHO
+  const weightInterpretation = latestMeasurement 
+    ? interpretWeightForAge(latestMeasurement.berat, ageInMonths, anak.jenis_kelamin)
+    : null;
+    
+  const heightInterpretation = latestMeasurement 
+    ? interpretHeightForAge(latestMeasurement.tinggi, ageInMonths, anak.jenis_kelamin)
+    : null;
+    
+  const weightForHeightInterpretation = latestMeasurement 
+    ? interpretWeightForHeight(latestMeasurement.berat, latestMeasurement.tinggi, anak.jenis_kelamin)
     : null;
 
   return (
@@ -239,113 +450,120 @@ export default async function DetailAnakPage({ params }: PageProps) {
         </Card>
       </div>
 
-      {perkembangan.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Weight className="h-5 w-5 text-blue-600" />
-                Grafik Berat Badan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SimpleLineChart 
-                data={chartData}
-                dataKey="beratBadan"
-                color="#3b82f6"
-                label="Berat Badan"
-                unit="kg"
-              />
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-gray-600">Data Terkini</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {latestMeasurement?.berat} kg
-                </p>
-                {perkembangan.length > 1 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {latestMeasurement.berat > perkembangan[perkembangan.length - 2].berat ? '↑' : '↓'}
-                    {' '}
-                    {Math.abs(latestMeasurement.berat - perkembangan[perkembangan.length - 2].berat).toFixed(1)} kg
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+      {/* Grafik WHO Standar */}
+      {latestMeasurement && (
+        <>
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">📋 Kalkulator Perhitungan</h2>
+            <p className="text-lg text-green-600 font-semibold">Status Perkembangan Gizi Anak</p>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Ruler className="h-5 w-5 text-green-600" />
-                Grafik Tinggi Badan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SimpleLineChart 
-                data={chartData}
-                dataKey="tinggiBadan"
-                color="#10b981"
-                label="Tinggi Badan"
-                unit="cm"
-              />
-              <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                <p className="text-xs text-gray-600">Data Terkini</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {latestMeasurement?.tinggi} cm
-                </p>
-                {perkembangan.length > 1 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {latestMeasurement.tinggi > perkembangan[perkembangan.length - 2].tinggi ? '↑' : '↓'}
-                    {' '}
-                    {Math.abs(latestMeasurement.tinggi - perkembangan[perkembangan.length - 2].tinggi).toFixed(1)} cm
-                  </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Weight className="h-5 w-5 text-blue-600" />
+                  Berat Badan Menurut Umur
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {weightInterpretation && (
+                  <WHOChart
+                    childData={{ age: ageInMonths, value: latestMeasurement.berat }}
+                    gender={anak.jenis_kelamin}
+                    type="weight"
+                    label="Berat Badan"
+                    unitLabel="Kg"
+                    color="#3b82f6"
+                    interpretation={weightInterpretation.interpretation}
+                    recommendation={weightInterpretation.recommendation}
+                  />
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-5 w-5 text-purple-600" />
-                Grafik Lingkar Lengan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SimpleLineChart 
-                data={chartData}
-                dataKey="lingkarKepala"
-                color="#8b5cf6"
-                label="LILA"
-                unit="cm"
-              />
-              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-                <p className="text-xs text-gray-600">Data Terkini</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {latestMeasurement?.lila} cm
-                </p>
-                {perkembangan.length > 1 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {latestMeasurement.lila > perkembangan[perkembangan.length - 2].lila ? '↑' : '↓'}
-                    {' '}
-                    {Math.abs(latestMeasurement.lila - perkembangan[perkembangan.length - 2].lila).toFixed(1)} cm
-                  </p>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Ruler className="h-5 w-5 text-green-600" />
+                  Tinggi Badan Menurut Umur
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {heightInterpretation && (
+                  <WHOChart
+                    childData={{ age: ageInMonths, value: latestMeasurement.tinggi }}
+                    gender={anak.jenis_kelamin}
+                    type="height"
+                    label="Tinggi Badan"
+                    unitLabel="Cm"
+                    color="#10b981"
+                    interpretation={heightInterpretation.interpretation}
+                    recommendation={heightInterpretation.recommendation}
+                  />
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-12">
-              <Activity className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">Belum ada data perkembangan</p>
-              <p className="text-gray-400 text-sm mt-2">
-                Data perkembangan akan muncul setelah dilakukan pemeriksaan
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Activity className="h-5 w-5 text-purple-600" />
+                  Berat Badan Menurut Tinggi Badan
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {weightForHeightInterpretation && (
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 p-3 rounded-lg text-center">
+                      <p className="text-sm text-gray-600 mb-2">Status Gizi</p>
+                      <p className={`text-lg font-bold px-3 py-2 rounded inline-block ${statusGizi?.color}`}>
+                        {statusGizi?.status}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg space-y-3">
+                      <div>
+                        <div className="flex items-start gap-2">
+                          <div className="text-2xl">📊</div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Jenis Kelamin</p>
+                            <p className="font-bold text-gray-900">{anak.jenis_kelamin}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Berat Badan</p>
+                            <p className="font-bold text-gray-900">{latestMeasurement.berat} Kg</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 mt-2">
+                          <div className="text-2xl">📏</div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Usia</p>
+                            <p className="font-bold text-gray-900">{ageInMonths} Bulan</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Tinggi Badan</p>
+                            <p className="font-bold text-gray-900">{latestMeasurement.tinggi} Cm</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="border-t border-green-200 pt-3">
+                        <p className="text-sm font-semibold text-gray-800 mb-2">Berat Badan Menurut Tinggi Badan</p>
+                        <p className="text-sm text-gray-700">{weightForHeightInterpretation.interpretation}</p>
+                      </div>
+                      
+                      <div className="border-t border-green-200 pt-3">
+                        <p className="text-sm font-semibold text-gray-800 mb-2">Berat Badan Menurut Tinggi Badan</p>
+                        <p className="text-sm text-gray-700">{weightForHeightInterpretation.recommendation}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
 
       {perkembangan.length > 0 && (
@@ -391,50 +609,6 @@ export default async function DetailAnakPage({ params }: PageProps) {
           </CardContent>
         </Card>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Informasi Lengkap</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Nama Lengkap</p>
-              <p className="font-semibold text-gray-900">{anak.nama_anak}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">NIK</p>
-              <p className="font-semibold text-gray-900">{anak.nik_anak}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Tanggal Lahir</p>
-              <p className="font-semibold text-gray-900">
-                {new Date(anak.tanggal_lahir).toLocaleDateString('id-ID', {
-                  day: '2-digit',
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Jenis Kelamin</p>
-              <p className="font-semibold text-gray-900">
-                {anak.jenis_kelamin === 'Laki-laki' ? 'Laki-laki' : 'Perempuan'}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Nama Orang Tua</p>
-              <p className="font-semibold text-gray-900">{anak.nama_orang_tua || '-'}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Posyandu</p>
-              <p className="font-semibold text-gray-900">
-                {anak.posyandu?.nama_posyandu || 'N/A'}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
