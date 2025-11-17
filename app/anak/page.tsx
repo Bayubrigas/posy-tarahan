@@ -2,7 +2,8 @@ import { Suspense } from 'react';
 import { supabase } from "@/lib/supabase";
 import SearchBar from "@/components/SearchBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Baby, Users } from "lucide-react";
+import { Baby, Users, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 interface AnakPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -21,8 +22,6 @@ async function AnakList({ searchParams }: AnakPageProps) {
 
   try {
     if (keyword && searchType === "posyandu") {
-      // Pencarian berdasarkan nama posyandu
-      // Menggunakan JOIN dengan foreign key posyandu_id
       const { data, error: fetchError } = await supabase
         .from("anak")
         .select(`
@@ -39,7 +38,6 @@ async function AnakList({ searchParams }: AnakPageProps) {
       anak = data;
       error = fetchError;
     } else {
-      // Pencarian nama atau NIK
       let query = supabase
         .from("anak")
         .select("id, nik_anak, nama_anak");
@@ -48,7 +46,6 @@ async function AnakList({ searchParams }: AnakPageProps) {
         if (searchType === "nik") {
           query = query.ilike("nik_anak", `%${keyword}%`);
         } else {
-          // Default: search by nama
           query = query.ilike("nama_anak", `%${keyword}%`);
         }
       }
@@ -75,26 +72,28 @@ async function AnakList({ searchParams }: AnakPageProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {anak && anak.length > 0 ? (
         anak.map((a) => (
-          <Card 
-            key={a.id} 
-            className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer border-l-4 border-l-purple-500"
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0">
-                  <Baby className="h-6 w-6 text-white" />
+          <Link key={a.id} href={`/anak/${a.id}`}>
+            <Card 
+              className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer border-l-4 border-l-purple-500 h-full"
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0">
+                    <Baby className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg text-gray-900 truncate">
+                      {a.nama_anak}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      NIK: {a.nik_anak}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-lg text-gray-900 truncate">
-                    {a.nama_anak}
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    NIK: {a.nik_anak}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         ))
       ) : (
         <div className="col-span-full">
