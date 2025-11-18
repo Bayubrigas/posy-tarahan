@@ -12,6 +12,7 @@ import {
   FileText,
   Settings,
   Home,
+  Download, // Tambahkan ini
 } from 'lucide-react';
 
 const menuItems = [
@@ -27,6 +28,11 @@ const menuItems = [
         label: 'Dashboard',
         icon: LayoutDashboard,
         href: '/dashboard',
+      },
+      {
+        href: '/download',
+        icon: Download,
+        label: 'Download Data'
       },
     ],
   },
